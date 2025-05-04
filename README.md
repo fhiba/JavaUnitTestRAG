@@ -17,11 +17,12 @@ La descripción se usa para facilitar la búsqueda semántica de clases similare
 ### ¿De dónde obtienen los datos? (web scraping, documentos, generación manual, etc) ¿Cuál es el o los formatos?
 Los datos provienen de proyectos open source extraídos desde GitHub. Los repos fueron buscados a mano o obtenidos de proyectos de la universidad en donde utilizamos java conociendo que teniamos buen test coverage. Los archivos fuente y los tests se almacenan junto con las descripciones en un JSON de formato.
 
-{
+``{
     clase:"",
     tests:"",
     descripcion:""
-}
+}``
+
 ### ¿Dónde ven el principal desafío?
 El mayor desafío está en lograr que el modelo no solo genere tests sintácticamente correctos, sino también funcionales y coherentes con el comportamiento esperado de la clase. Esto implica combinar bien el retrieval con la generación, además de lidiar con dependencias, mocks, y estilos de testing variables entre proyectos. También va a ser clave manejar bien la representación semántica de las clases para que las búsquedas realmente devuelvan ejemplos útiles.
 
