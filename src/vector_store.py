@@ -1,40 +1,26 @@
-import pinecone
-from langchain_pinecone import PineconeVectorStore
-from pinecone import ServerlessSpec
-from pinecone.grpc import PineconeGRPC as Pinecone
+import os
+from dotenv import load_dotenv
+from pinecone import Pinecone, CloudProvider, AwsRegion, EmbedModel, IndexEmbed
 
+load_dotenv()
 
-def get_vector_store(index_name, embeddings, embedding_size=384):
-    """Creates vector store from Pinecone for storing and managing embeddings.
+def get_vector_store():
+    pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+    index_name = os.getenv("PINECONE_INDEX_NAME")
 
-    :param str index_name: The name of the index to create or retrieve from Pinecone.
-    :param str embeddings: The embedding function to be used to generate embeddings
-    :param int embedding_size: The size (dimension) of the embeddings. Defaults to 384 (e.g., for sentence-transformers/all-MiniLM-L6-v2).
+    existing = pc.list_indexes()
+    existing_names = [index.name for index in existing]
 
-    :return: PineconeVectorStore: An object representing the vector store in Pinecone for managing embeddings.
-
-    :raise: ValueError: If the index creation fails due to invalid parameters or connection issues.
-    """
-
-    pc = Pinecone(
-        api_key=os.environ["PINECONE_API_KEY"]
-    )  # Pinecone is initialized using an API key stored in the environment variable
-
-    if (
-        INDEX_NAME not in pc.list_indexes().names()
-    ):  # Check whether an index with the given index_name already exists
-        pc.create_index(
-            name=INDEX_NAME,  # Name of the index
-            dimension=embedding_size,  # Size of the vectors (embeddings)
-            metric="cosine",  # Distance metric used to compare vectors
-            spec=ServerlessSpec(  # Determines the infrastructure used
-                cloud="aws",  # Specifies that the Pinecone index is hosted on AWS
-                region="us-east-1",  # Specifies the region of the cloud provider
-            ),
+    if index_name not in existing_names:
+        pc.create_index_for_model(
+            name=index_name,
+            cloud= CloudProvider.AWS,
+            region= AwsRegion.US_EAST_1,
+            embed= IndexEmbed(
+                model= EmbedModel.Multilingual_E5_Large,
+                field_map={"text": "text"},
+                metric="cosine"
+            )
         )
 
-    vectorstore = PineconeVectorStore(
-        index_name=INDEX_NAME, embedding=embeddings
-    )  # initializes a PineconeVectorStore object using the index_name and the provided embeddings model or function
-
-    return vectorstore
+    return pc.Index(index_name), index_name

@@ -1,0 +1,13 @@
+openai
+pinecone-client
+langchain
+langchain-community
+python-dotenv
+langchain-pinecone
+jinja2
+langchain-ollama
+google-api-core
+googleapis-common-protos
+protobuf
+grpcio
+grpcio-tools
