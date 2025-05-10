@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 from vector_store import get_vector_store
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import OpenAIEmbeddings, HuggingFaceEmbeddings
+from langchain.text_splitter import CharacterTextSplitter
+
 
 import logging
 
@@ -15,7 +17,7 @@ with open("../datasets/dataset.json", "r") as f:
 
 embeddings = HuggingFaceEmbeddings(  # embedding=OpenAIEmbeddings() rate limit
     model_name='sentence-transformers/all-MiniLM-L6-v2',
-    model_kwargs={'device': 'cuda'}  # TODO CHANGE IF NOT USING GPU
+    model_kwargs={'device': 'cpu'}  # TODO CHANGE IF NOT USING GPU
 )
 
 
@@ -32,37 +34,36 @@ def main():
         doc_id = m.group(1) if m else str(data.index(item))
 
         text = item["class"] + "\n" + item.get("description", "")
-        chunks = get_chunks(text)
-        for chunk in chunks:
-            embedding = embeddings.get_embedding(chunks)
 
+        json_str = json.dumps(text,ensure_ascii=False)
+        chunks = get_chunks(json_str,750,150)
+        for i,chunk in enumerate(chunks):
+            embedding = embeddings.embed_query(chunk)
+            if embedding is None:
+                continue
             records.append({
-                "id":       doc_id,
-                "value":     embedding,
-                "class":    item["class"],
-                "test":     item.get("tests", ""),
-                "description": item.get("description", "")
+                "id":       f"{doc_id}__{i}",
+                "values":     embedding,
+                "metadata": {
+                    "text":     text,
+                    "class":    item["class"],
+                    "test":     item.get("tests", ""),
+                    "description": item.get("description", "")
+                }
             })
 
-    index.upsert_records(records=records, namespace="default")
+    index.upsert(vectors=records, namespace="default")
     print(f"Upserted {len(records)} records into '{index_name}'")
 
-def get_chunks(docs, chunk_size=750, chunk_overlap=150):
-    """
-    Get chunks from docs. Our loaded doc may be too long for most models, and even if it fits it can struggle to find relevant context. So we generate chunks
-    :param docs: docs to be splitted
-
-    :return: chunks
-    """
-
-    text_splitter = RecursiveCharacterTextSplitter(
-        # recommended splitter for generic text. split documents recursively by different characters - starting with "\n\n", then "\n", then " "
-        chunk_size=chunk_size,  # max size (in terms of number of characters) of the final documents
-        chunk_overlap=chunk_overlap,  # how much overlap there should be between chunks
+def get_chunks(text: str, chunk_size: int, chunk_overlap: int):
+    splitter = CharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
         add_start_index=True
     )
-    chunks = text_splitter.split_documents(docs)
-    logger.info(f"Split {len(docs)} documents into {len(chunks)} chunks.")
+    # <-- use split_text() on a raw string
+    chunks = splitter.split_text(text)
+    logger.info(f"Split text of length {len(text)} into {len(chunks)} chunks.")
     return chunks
 
 
