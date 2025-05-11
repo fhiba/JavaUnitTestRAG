@@ -12,6 +12,7 @@ from langchain_pinecone import PineconeVectorStore
 load_dotenv()
 
 
+
 def create_local_llm():
     model_id = "Salesforce/codet5p-770m"
     tokenizer = AutoTokenizer.from_pretrained(model_id)
@@ -21,11 +22,11 @@ def create_local_llm():
         "text2text-generation",
         model=model,
         tokenizer=tokenizer,
-        max_new_tokens=512,
+        max_new_tokens=10000,
         temperature=0.3,
         top_k=30,
         repetition_penalty=1.2,
-        do_sample=True
+        do_sample=True,
     )
 
     return HuggingFacePipeline(pipeline=pipe)
@@ -60,6 +61,16 @@ def get_pinecone_vectorstore():
         raise
 
 
+def retrieve_k_similar_docs(db,query, k=5):
+    results = db.similarity_search_with_score(
+        query=query,
+        k=k
+    )
+
+    retrieved_documents = [doc.page_content for doc, score in results]
+
+    return retrieved_documents, results
+
 def generate_response(db, prompt):
     try:
         hf_llm = create_local_llm()
@@ -71,8 +82,29 @@ def generate_response(db, prompt):
             return_source_documents=True,
             verbose=True
         )
+        retrieved_documents, results = retrieve_k_similar_docs(db,prompt)
+        information = "\n\n".join(retrieved_documents)
+        message_content = f"""You are an autonomous code generation agent. Your task is to write **new** unit tests using **JUnit 5** for a Java class provided.
+                            IMPORTANT RULES:
+                            1. You MUST return only valid Java test code using `@Test` and assertion methods such as `assertEquals`, `assertTrue`, `assertThrows`.
+                            2. You MUST write tests that are relevant to the user's request.
+                            3. DO NOT include `import` statements, comments, class headers, or method explanations.
+                            4. NEVER repeat code from the original class or documentation.
+                            5. You MUST generate at least one passing test and one failing test **if applicable**.
+                            6. You may assume the test class is already defined and has access to the class under test.
+                            
+                            RESPONSE FORMAT:
+                            Only raw Java methods
+                            
+                            CONTEXT INFORMATION (retrieved from knowledge base):
+                            {information}
+                            
+                            USER REQUEST:
+                            {prompt}
+                            
+                            Generate the test methods now."""
 
-        result = chain.invoke({"query": prompt})
+        result = chain.invoke({"query": message_content})
 
         if isinstance(result, dict):
             if "result" in result:
