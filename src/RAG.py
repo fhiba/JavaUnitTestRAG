@@ -2,35 +2,22 @@ import os
 import traceback
 import sys
 from dotenv import load_dotenv
+from langchain_text_splitters import SentenceTransformersTokenTextSplitter
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
 from langchain.chains.retrieval_qa.base import RetrievalQA
 from langchain.llms import HuggingFacePipeline
 from pinecone import Pinecone
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
+from langchain_community.llms import Ollama
+
 
 load_dotenv()
 
 
 
 def create_local_llm():
-    model_id = "Salesforce/codet5p-770m"
-    tokenizer = AutoTokenizer.from_pretrained(model_id)
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_id)
-
-    pipe = pipeline(
-        "text2text-generation",
-        model=model,
-        tokenizer=tokenizer,
-        max_new_tokens=10000,
-        temperature=0.3,
-        top_k=30,
-        repetition_penalty=1.2,
-        do_sample=True,
-    )
-
-    return HuggingFacePipeline(pipeline=pipe)
-
+    return Ollama(model="mistral", temperature=0.3)
 
 def get_pinecone_vectorstore():
     try:
@@ -103,6 +90,11 @@ def generate_response(db, prompt):
                             {prompt}
                             
                             Generate the test methods now."""
+
+        token_splitter = SentenceTransformersTokenTextSplitter(chunk_overlap=20, tokens_per_chunk=256)
+
+        token_split_texts = []
+        token_split_texts += token_splitter.split_text(message_content)
 
         result = chain.invoke({"query": message_content})
 
