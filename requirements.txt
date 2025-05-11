@@ -14,3 +14,9 @@ googleapis-common-protos
 protobuf
 grpcio
 grpcio-tools
+langchain
+transformers
+accelerate
+pinecone-client
+python-dotenv
+torch
