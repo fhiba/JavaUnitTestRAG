@@ -20,3 +20,6 @@ accelerate
 pinecone-client
 python-dotenv
 torch
+umap_learn
+plotly
+pandas
