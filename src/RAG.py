@@ -146,7 +146,6 @@ Generate the test methods now.
     return str(result).strip()
 
 
-# Custom RAGAS-like evaluation using Ollama
 def evaluate_faithfulness(
         question: str,
         answer: str,
@@ -157,7 +156,6 @@ def evaluate_faithfulness(
     Evaluate faithfulness of the answer based on contexts using Ollama.
     This function mimics RAGAS faithfulness evaluation without requiring OpenAI.
     """
-    # Prepare the evaluation prompt
     eval_prompt = f"""
 Task: Evaluate the faithfulness of the generated answer based on the provided contexts.
 Faithfulness measures if the answer contains information that is not present in the contexts.
@@ -180,15 +178,11 @@ Then provide a final score between 0 and 1.
 Output only the final score as a number at the end.
 """
 
-    # Get evaluation from Ollama
     try:
         evaluation_result = llm_model.invoke(eval_prompt)
-
-        # Extract score - look for the last number in the text
         score_matches = re.findall(r'(\d+\.\d+|\d+)', evaluation_result)
         if score_matches:
             score = float(score_matches[-1])
-            # Ensure score is between 0 and 1
             score = max(0.0, min(1.0, score))
         else:
             print("Warning: Could not extract faithfulness score. Using default 0.5")
@@ -228,7 +222,6 @@ def main() -> None:
     model_name = args.model
 
     try:
-        # Import torch here to avoid issues if not installed
         try:
             import torch
         except ImportError:
@@ -254,12 +247,9 @@ def main() -> None:
         parent_dir = os.path.dirname(script_dir)
         output_dir = os.path.join(parent_dir, "output")
         os.makedirs(output_dir, exist_ok=True)
-
-        # Initialize the database and LLM
         db = get_pinecone_vectorstore() if use_rag else None
         llm = create_local_llm(model_name=model_name)
 
-        # Generate test methods
         test_methods = generate_response(db, class_source, llm, use_rag)
         out_path = os.path.join(output_dir, test_filename)
         with open(out_path, 'w', encoding='utf-8') as f:
@@ -267,7 +257,6 @@ def main() -> None:
         label = "rag" if use_rag else "no_rag"
         print(f"[{label}] Test methods written to {out_path}", file=sys.stderr)
 
-        # If using RAG, perform evaluation and visualization
         if use_rag and db is not None:
             retrieved_docs, _ = retrieve_k_similar_docs(db, class_source, k=5)
 
@@ -281,7 +270,6 @@ def main() -> None:
                 print(f"\n[DEBUG] Number of contexts: {len(retrieved_docs)}")
                 print(f"[DEBUG] First context length: {len(retrieved_docs[0]) if retrieved_docs else 0}")
 
-                # Use custom Ollama-based evaluation instead of RAGAS
                 faithfulness_score = evaluate_faithfulness(
                     question=class_source,
                     answer=test_methods,
@@ -292,7 +280,6 @@ def main() -> None:
                 print("\n=== RAG Metrics ===")
                 print(f"Faithfulness: {faithfulness_score['faithfulness']:.4f}")
 
-                # Create a simple visualization of the scores
                 try:
                     plt.figure(figsize=(6, 4))
                     plt.bar(['Faithfulness'], [faithfulness_score['faithfulness']], color='blue')
@@ -307,7 +294,6 @@ def main() -> None:
                 except Exception as e:
                     print(f"[WARNING] Failed to create metrics plot: {str(e)}", file=sys.stderr)
 
-            # Create embedding visualization
             try:
                 query_vec = db.embeddings.embed_query(class_source)
                 emb_matrix, umap_model = load_and_fit_embeddings(
