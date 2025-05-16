@@ -10,21 +10,16 @@ from datetime import datetime
 import matplotlib
 import numpy as np
 from dotenv import load_dotenv
-from langchain.chains.retrieval_qa.base import RetrievalQA
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.llms import Ollama
-from langchain import LLMChain
-from langchain.prompts import PromptTemplate
 from langchain_pinecone import PineconeVectorStore
 from pinecone import Pinecone
 import matplotlib.pyplot as plt
 
-# Import for custom RAGAS evaluation with Ollama
 from typing import List, Dict, Any
 
 matplotlib.use('Agg')
 
-# Import your embedding visualization module
 from plot_embeddings import (
     load_and_fit_embeddings,
     project_embeddings,
@@ -86,14 +81,13 @@ def retrieve_k_similar_docs(db: PineconeVectorStore, query: str, k: int = 2):
     reranked_results = list(zip(docs_list, orig_scores))
     return [d.page_content for d in docs_list], reranked_results
 
-
 def generate_response(
         db: PineconeVectorStore | None,
         prompt: str,
         model,
         use_rag: bool
 ) -> str:
-    """Generate a response using either RAG or direct LLM."""
+    """Generate a response using either RAG or direct LLM, with reranking baked into retrieval."""
     base_instructions = """
 You are an autonomous code generation agent. Your task is to write **new** unit tests using **JUnit 5** for a Java class provided.
 IMPORTANT RULES:
@@ -104,11 +98,11 @@ IMPORTANT RULES:
 5. Generate at least one passing test and one failing test *if applicable*.
 6. Assume the test class is already defined and has access to the class under test.
 """
+
     if use_rag and db is not None:
-        docs, _ = retrieve_k_similar_docs(db, prompt)
+        docs, _ = retrieve_k_similar_docs(db, prompt, k=2)
         info_block = "\n\n".join(docs)
-        full_prompt = f"""
-{base_instructions}
+        full_prompt = f"""{base_instructions}
 
 CONTEXT INFORMATION (retrieved from knowledge base):
 {info_block}
@@ -118,32 +112,20 @@ USER REQUEST:
 
 Generate the test methods now.
 """
-        chain = RetrievalQA.from_chain_type(
-            llm=model,
-            chain_type="stuff",
-            retriever=db.as_retriever(search_type="similarity", search_kwargs={"k": 2}),
-            return_source_documents=True,
-            verbose=False,
-        )
-        result = chain.invoke({"query": full_prompt})
+
     else:
-        template_str = f"""{base_instructions}
+        full_prompt = f"""{base_instructions}
 
 USER REQUEST:
-{{user_request}}
+{prompt}
 
 Generate the test methods now.
 """
-        prompt_template = PromptTemplate(
-            input_variables=["user_request"],
-            template=template_str
-        )
-        llm_chain = LLMChain(llm=model, prompt=prompt_template)
-        result = llm_chain.run(user_request=prompt)
-
+    result = model.invoke(full_prompt)
     if isinstance(result, dict):
         result = result.get("result") or result.get("answer") or ""
-    return str(result).strip()
+    return result.strip()
+
 
 
 def evaluate_faithfulness(
