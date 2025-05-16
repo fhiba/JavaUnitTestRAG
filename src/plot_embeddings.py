@@ -1,18 +1,24 @@
-from __future__ import annotations
-
 import os
 from datetime import datetime
 from typing import Tuple
 
 import numpy as np
-import pandas as pd
-import plotly.graph_objects as go
+import matplotlib.pyplot as plt
 import umap
 from dotenv import load_dotenv
 from pinecone import Pinecone
-from tqdm import tqdm
 
 load_dotenv()
+
+
+def _default_save_path(prefix: str) -> str:
+    """
+    Generate a default filepath under 'plots/' for saving images.
+    """
+    os.makedirs("plots", exist_ok=True)
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    return os.path.join("plots", f"{prefix}_{timestamp}.png")
+
 
 def load_and_fit_embeddings(
     seed_vec: list[float] | np.ndarray,
@@ -31,87 +37,70 @@ def load_and_fit_embeddings(
         include_values=True,
     )
     emb_list = [m.values for m in resp.matches]
-
     if not emb_list:
-        raise RuntimeError(
-            "No vectors retrieved from Pinecone. "
-            "Check that the index is populated and that the namespace is correct."
-        )
+        raise RuntimeError("No embeddings returned from Pinecone query.")
 
-    emb_matrix = np.vstack(emb_list)  # shape (n, dim)
-    umap_model = umap.UMAP(random_state=0).fit(emb_matrix)
-    return emb_matrix, umap_model
-
-def project_embeddings(vectors: np.ndarray, umap_model: "umap.UMAP") -> np.ndarray:
-    if vectors.ndim == 1:
-        vectors = vectors.reshape(1, -1)
-    return umap_model.transform(vectors)
+    emb_matrix = np.vstack(emb_list)
+    reducer = umap.UMAP(n_components=2, metric="cosine")
+    reducer.fit(emb_matrix)
+    return emb_matrix, reducer
 
 
-def _default_save_path(prefix: str = "embedding_plot") -> str:
-    os.makedirs("plots", exist_ok=True)
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return os.path.join("plots", f"{prefix}_{ts}.png")
+def project_embeddings(
+    emb: np.ndarray | list[float], reducer: "umap.UMAP"
+) -> np.ndarray:
+    arr = np.array(emb)
+    if arr.ndim == 1:
+        arr = arr.reshape(1, -1)
+    return reducer.transform(arr)
 
 
 def plot_relevant_docs(
     projected_dataset: np.ndarray,
     projected_query: np.ndarray,
     projected_retrieved: np.ndarray,
-    *,
-    title: str = "Embedding Projection",
+    title: str = "RAG Embeddings",
     save_path: str | None = None,
-) -> str:
-    fig = go.Figure()
-
-    fig.add_trace(
-        go.Scatter(
-            x=projected_dataset[:, 0],
-            y=projected_dataset[:, 1],
-            mode="markers",
-            name="Dataset",
-            marker=dict(size=6, color="gray"),
-        )
-    )
-
-    fig.add_trace(
-        go.Scatter(
-            x=projected_query[:, 0],
-            y=projected_query[:, 1],
-            mode="markers",
-            name="Query",
-            marker=dict(size=12, symbol="x", color="red"),
-        )
-    )
-
-    fig.add_trace(
-        go.Scatter(
-            x=projected_retrieved[:, 0],
-            y=projected_retrieved[:, 1],
-            mode="markers",
-            name="Retrieved",
-            marker=dict(size=10, symbol="circle-open", color="green"),
-        )
-    )
-
-    fig.update_layout(
-        title=title,
-        xaxis=dict(visible=False),
-        yaxis=dict(visible=False),
-        title_x=0.5,
-        showlegend=True,
-    )
-
+) -> plt.Figure:
+    """
+    Plot the full embedding space, highlight the query point and retrieved points.
+    Returns a matplotlib Figure.
+    """
     if save_path is None:
         save_path = _default_save_path(prefix=title.replace(" ", "_"))
 
-    fig.write_image(save_path)
-    fig.show()
+    fig, ax = plt.subplots(figsize=(8, 6))
+    # Corpus
+    ax.scatter(
+        projected_dataset[:, 0],
+        projected_dataset[:, 1],
+        s=20,
+        alpha=0.3,
+        label="Corpus"
+    )
+    # Query
+    ax.scatter(
+        projected_query[:, 0],
+        projected_query[:, 1],
+        s=100,
+        marker="x",
+        label="Query"
+    )
+    # Retrieved
+    ax.scatter(
+        projected_retrieved[:, 0],
+        projected_retrieved[:, 1],
+        s=80,
+        facecolors="none",
+        edgecolors="green",
+        label="Retrieved"
+    )
 
-    return save_path
+    ax.set_title(title)
+    ax.legend(loc="upper right")
+    ax.axis("off")
 
-__all__ = [
-    "load_and_fit_embeddings",
-    "project_embeddings",
-    "plot_relevant_docs",
-]
+    fig.tight_layout()
+    fig.savefig(save_path, bbox_inches="tight")
+    plt.close(fig)
+    return fig

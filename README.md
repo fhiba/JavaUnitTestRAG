@@ -71,7 +71,7 @@ The main challenge is ensuring the model generates not only syntactically correc
 ### Installation
 
 ```bash
-git clone https://github.com/your-org/AutoTestRAG.git
+git clone https://github.com/fhiba/JavaUnitTestRAG.git
 cd AutoTestRAG
 python3 -m venv .venv
 source .venv/bin/activate
@@ -81,11 +81,14 @@ pip install -r requirements.txt
 ### Usage
 
 ```bash
-# Build the dataset from a cloned repo
-python main.py build_dataset   --repo-path /path/to/Java-Unit-Testing   --output dataset.json   --config config.yaml
+# 1) Direct-LLM mode (no RAG retrieval):
+python RAG.py /path/to/MyClass.java
 
-# Generate tests for a class via RAG
-python main.py generate_tests   --input /path/to/MyClass.java   --project-root /path/to/project   --vector-db-endpoint <PINECONE_INDEX_NAME>   --topk 5   --output tests/MyClassTest.java   --config config.yaml
+# 2) RAG + Pinecone retrieval (requires PINECONE_API_KEY & PINECONE_INDEX_NAME in your env):
+python RAG.py /path/to/MyClass.java --use_rag
+
+# 3) RAG + reranking (adds cross-encoder rerank on top of --use_rag):
+python RAG.py /path/to/MyClass.java --use_rag --rerank
 ```
 
 ##  Authors

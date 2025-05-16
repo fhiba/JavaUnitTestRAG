@@ -23,3 +23,6 @@ torch
 umap_learn
 plotly
 pandas
+datasets
+ragas
+matplotlib
